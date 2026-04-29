@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from models import Session, StrategyParam, Trade
+from models import Session, StrategyParam, Trade, Account
 from data import fetch_historical_data
 from strategy import MACrossoverStrategy
 
@@ -8,8 +8,31 @@ st.set_page_config(page_title="Auto Trade Dashboard", layout="wide")
 
 st.title("自動売買シミュレーション＆トレード ダッシュボード")
 
-# 1. Read strategy parameters
 session = Session()
+
+# 0. Account Info
+st.header("口座情報 (Account)")
+account = session.query(Account).first()
+if not account:
+    account = Account(balance=1000000.0)
+    session.add(account)
+    session.commit()
+
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("現在の余力 (Balance)", f"¥{account.balance:,.0f}")
+with col2:
+    with st.expander("余力の設定 / 入金"):
+        new_balance = st.number_input("余力を入力してください (円)", min_value=0, value=int(account.balance), step=10000)
+        if st.button("更新する"):
+            account.balance = new_balance
+            session.commit()
+            st.success(f"余力を {new_balance:,}円 に更新しました！")
+            st.rerun()
+
+st.divider()
+
+# 1. Read strategy parameters
 params = session.query(StrategyParam).all()
 
 if not params:
@@ -76,7 +99,8 @@ else:
             "銘柄": t.ticker,
             "アクション": t.action,
             "株数": t.shares,
-            "価格": t.price
+            "価格": f"¥{t.price:,.2f}",
+            "損益 (PnL)": f"¥{t.pnl:,.2f}" if t.pnl is not None else "-"
         })
     st.dataframe(pd.DataFrame(trade_data))
 

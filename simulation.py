@@ -1,7 +1,7 @@
 import itertools
 from data import fetch_historical_data
 from strategy import MACrossoverStrategy
-from models import Session, StrategyParam, init_db
+from models import Session, StrategyParam, Account, init_db
 
 def run_simulation(ticker: str):
     print(f"Starting simulation for {ticker}...")
@@ -36,6 +36,13 @@ def run_simulation(ticker: str):
 
         # Save to database
         session = Session()
+
+        # Initialize Account if it doesn't exist
+        account = session.query(Account).first()
+        if not account:
+            account = Account(balance=initial_capital)
+            session.add(account)
+
         param = session.query(StrategyParam).filter_by(ticker=ticker).first()
         if not param:
             param = StrategyParam(ticker=ticker)

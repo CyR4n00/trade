@@ -1,6 +1,6 @@
 from data import fetch_latest_data, fetch_historical_data
 from strategy import MACrossoverStrategy
-from models import Session, StrategyParam, Trade, init_db
+from models import Session, StrategyParam, Trade, Account, init_db
 
 def run_trading(ticker: str):
     print(f"Starting actual trading logic for {ticker}...")
@@ -59,19 +59,55 @@ def run_trading(ticker: str):
     print(f"Latest Price: {price:.2f}")
     print(f"Action: {action}")
 
-    # 4. If BUY/SELL, record to DB (simulated actual trade)
+    # 4. If BUY/SELL, record to DB (simulated actual trade) and update Account balance
     if action in ["BUY", "SELL"]:
-        # Simulate trading 100 shares
         shares = 100
-        new_trade = Trade(
-            ticker=ticker,
-            action=action,
-            price=price,
-            shares=shares
-        )
-        session.add(new_trade)
-        session.commit()
-        print(f"Recorded trade in DB: {action} {shares} shares at {price:.2f}")
+        cost = price * shares
+
+        # Ensure account exists
+        account = session.query(Account).first()
+        if not account:
+            account = Account(balance=1000000.0)
+            session.add(account)
+            session.commit()
+
+        pnl = None
+
+        if action == "BUY":
+            if account.balance >= cost:
+                account.balance -= cost
+                print(f"✅ 【フィードバック】 {shares}株を {price:.2f}円 で買付しました。（約定代金: {cost:.2f}円）")
+                print(f"   現在の余力: {account.balance:.2f}円")
+            else:
+                print(f"❌ 【フィードバック】 {shares}株（{cost:.2f}円）を買付する余力（{account.balance:.2f}円）が足りません。見送ります。")
+                action = None # Prevent recording trade
+        elif action == "SELL":
+            # Simple assumption: sell what we last bought.
+            # In a real app we'd track specific open positions.
+            last_buy = session.query(Trade).filter_by(ticker=ticker, action="BUY").order_by(Trade.timestamp.desc()).first()
+            if last_buy:
+                pnl = (price - last_buy.price) * shares
+                account.balance += cost
+                print(f"✅ 【フィードバック】 {shares}株を {price:.2f}円 で売却しました。（売却代金: {cost:.2f}円）")
+                if pnl >= 0:
+                    print(f"   🎉 利益確定: +{pnl:.2f}円")
+                else:
+                    print(f"   😢 損失確定: {pnl:.2f}円")
+                print(f"   現在の余力: {account.balance:.2f}円")
+            else:
+                print("❌ 【フィードバック】 保有ポジションがないため、売却を見送ります。")
+                action = None
+
+        if action:
+            new_trade = Trade(
+                ticker=ticker,
+                action=action,
+                price=price,
+                shares=shares,
+                pnl=pnl
+            )
+            session.add(new_trade)
+            session.commit()
 
     session.close()
 

@@ -20,7 +20,14 @@ class Trade(Base):
     action = Column(String(10), nullable=False) # 'BUY' or 'SELL'
     price = Column(Float, nullable=False)
     shares = Column(Integer, nullable=False)
+    pnl = Column(Float, nullable=True) # Profit/Loss realized on SELL
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+class Account(Base):
+    __tablename__ = 'account'
+    id = Column(Integer, primary_key=True)
+    balance = Column(Float, nullable=False, default=1000000.0) # 余力
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 engine = create_engine('sqlite:///trading.db')
 Session = sessionmaker(bind=engine)
