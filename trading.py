@@ -113,4 +113,9 @@ def run_trading(ticker: str):
 
 if __name__ == "__main__":
     init_db()
-    run_trading("7203.T")
+    portfolio = ["7203.T", "6758.T", "8306.T", "8058.T", "9433.T"]
+
+    print("=== ポートフォリオ一括トレード判定 ===")
+    for ticker in portfolio:
+        run_trading(ticker)
+        print("-" * 40)
