@@ -29,6 +29,16 @@ class Account(Base):
     balance = Column(Float, nullable=False, default=1000000.0) # 余力
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class AnalysisReport(Base):
+    __tablename__ = 'analysis_reports'
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String(20), nullable=False)
+    trade_id = Column(Integer, nullable=True) # Linked to a specific sell trade
+    good_points = Column(String(500), nullable=True) # 良かった点
+    bad_points = Column(String(500), nullable=True) # 悪かった点・改善点
+    summary = Column(String(500), nullable=True) # 分析サマリー
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
 engine = create_engine('sqlite:///trading.db')
 Session = sessionmaker(bind=engine)
 

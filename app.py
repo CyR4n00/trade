@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from models import Session, StrategyParam, Trade, Account
+from models import Session, StrategyParam, Trade, Account, AnalysisReport
 from data import fetch_historical_data
 from strategy import MACrossoverStrategy
 
@@ -103,5 +103,18 @@ else:
             "損益 (PnL)": f"¥{t.pnl:,.2f}" if t.pnl is not None else "-"
         })
     st.dataframe(pd.DataFrame(trade_data))
+
+# 4. View AI Analysis Report
+st.divider()
+st.subheader("トレード分析レポート (フィードバック)")
+reports = session.query(AnalysisReport).order_by(AnalysisReport.timestamp.desc()).limit(10).all()
+
+if not reports:
+    st.info("まだ分析レポートはありません。（売却取引が行われると生成されます）")
+else:
+    for rep in reports:
+        with st.expander(f"{rep.timestamp.strftime('%Y-%m-%d %H:%M')} - {rep.ticker} ({rep.summary})"):
+            st.write(f"**【良かった点】**\n{rep.good_points}")
+            st.write(f"**【悪かった点・改善点】**\n{rep.bad_points}")
 
 session.close()
