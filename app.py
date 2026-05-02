@@ -32,6 +32,74 @@ with col2:
 
 st.divider()
 
+# 0.5 Holdings Summary
+st.header("保有株式サマリー (Holdings)")
+
+# Calculate current holdings from trades
+trades = session.query(Trade).order_by(Trade.timestamp.asc()).all()
+holdings = {}
+
+for t in trades:
+    if t.ticker not in holdings:
+        holdings[t.ticker] = {"shares": 0, "total_cost": 0.0}
+
+    if t.action == "BUY":
+        holdings[t.ticker]["shares"] += t.shares
+        holdings[t.ticker]["total_cost"] += (t.price * t.shares)
+    elif t.action == "SELL":
+        # Simplified: Assuming we sell all shares. Reset holdings.
+        holdings[t.ticker]["shares"] = 0
+        holdings[t.ticker]["total_cost"] = 0.0
+
+summary_data = []
+total_unrealized_pnl = 0.0
+total_market_value = 0.0
+
+for ticker, data in holdings.items():
+    if data["shares"] > 0:
+        avg_price = data["total_cost"] / data["shares"]
+
+        # Fetch latest price to calculate unrealized PnL
+        try:
+            import yfinance as yf
+            ticker_obj = yf.Ticker(ticker)
+            hist = ticker_obj.history(period="5d")
+            if not hist.empty:
+                current_price = hist['Close'].iloc[-1]
+            else:
+                current_price = avg_price # Fallback
+        except:
+            current_price = avg_price
+
+        market_value = current_price * data["shares"]
+        unrealized_pnl = market_value - data["total_cost"]
+
+        total_market_value += market_value
+        total_unrealized_pnl += unrealized_pnl
+
+        summary_data.append({
+            "銘柄": ticker,
+            "保有株数": data["shares"],
+            "取得単価": f"¥{avg_price:,.2f}",
+            "現在値": f"¥{current_price:,.2f}",
+            "評価額": f"¥{market_value:,.0f}",
+            "評価損益": f"¥{unrealized_pnl:,.0f}"
+        })
+
+if not summary_data:
+    st.info("現在保有している株式はありません。")
+else:
+    # Summary Metrics
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.metric("株式評価額 計", f"¥{total_market_value:,.0f}")
+    with col_b:
+        st.metric("評価損益 計", f"¥{total_unrealized_pnl:,.0f}", delta=float(total_unrealized_pnl))
+
+    st.dataframe(pd.DataFrame(summary_data))
+
+st.divider()
+
 # 1. Read strategy parameters
 params = session.query(StrategyParam).all()
 
