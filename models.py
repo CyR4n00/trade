@@ -22,6 +22,7 @@ class Trade(Base):
     id = Column(Integer, primary_key=True)
     ticker = Column(String(20), nullable=False)
     action = Column(String(10), nullable=False) # 'BUY' or 'SELL'
+    trade_type = Column(String(20), nullable=False, default='CASH') # 'CASH' (現物), 'MARGIN_LONG' (信用買い), 'MARGIN_SHORT' (信用売り)
     price = Column(Float, nullable=False)
     shares = Column(Integer, nullable=False)
     pnl = Column(Float, nullable=True) # Profit/Loss realized on SELL
@@ -30,7 +31,9 @@ class Trade(Base):
 class Account(Base):
     __tablename__ = 'account'
     id = Column(Integer, primary_key=True)
-    balance = Column(Float, nullable=False, default=1000000.0) # 余力
+    balance = Column(Float, nullable=False, default=1000000.0) # 現物買付余力
+    margin_deposit = Column(Float, nullable=False, default=1000000.0) # 委託保証金 (Margin Deposit)
+    margin_power = Column(Float, nullable=False, default=3000000.0) # 信用建余力 (通常保証金の約3倍)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class AnalysisReport(Base):

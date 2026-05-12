@@ -96,27 +96,32 @@ def run_trading(ticker: str):
         # Ensure account exists
         account = session.query(Account).first()
         if not account:
-            account = Account(balance=1000000.0)
+            account = Account(balance=1000000.0, margin_deposit=1000000.0, margin_power=3000000.0)
             session.add(account)
             session.commit()
 
         pnl = None
+        trade_type = "CASH" # 今後のアップデートで 'MARGIN_LONG' や 'MARGIN_SHORT' に動的に変更する
 
         if action == "BUY":
             # 日本株の単元株数(100株)をベースに、余力で買える最大株数を計算
+            # TODO: 信用買いの場合は account.margin_power を使用する
             max_lots = int(account.balance // (price * 100))
             if max_lots > 0:
                 shares = max_lots * 100
                 cost = price * shares
 
                 # --- 証券API連携 (Mock) ---
-                api_response = broker.execute_buy(ticker, shares, price)
+                api_response = broker.execute_buy(ticker, shares, price, trade_type)
                 if api_response.get("status") == "success":
-                    account.balance -= cost
-                    print(f"✅ 【フィードバック】 余力を活用し、{shares}株を {price:.2f}円 で買付しました。（約定代金: {cost:,.2f}円）")
-                    print(f"   現在の余力: {account.balance:,.2f}円")
+                    if trade_type == "CASH":
+                        account.balance -= cost
+                    # TODO: 信用買い時の margin_power の減算処理
 
-                    new_trade = Trade(ticker=ticker, action=action, price=price, shares=shares, pnl=None)
+                    print(f"✅ 【フィードバック】 余力（{trade_type}）を活用し、{shares}株を {price:.2f}円 で買付しました。（約定代金: {cost:,.2f}円）")
+                    print(f"   現在の現物余力: {account.balance:,.2f}円")
+
+                    new_trade = Trade(ticker=ticker, action=action, trade_type=trade_type, price=price, shares=shares, pnl=None)
                     session.add(new_trade)
                     session.commit()
                 else:
@@ -132,11 +137,13 @@ def run_trading(ticker: str):
                 pnl = (price - last_buy.price) * shares
 
                 # --- 証券API連携 (Mock) ---
-                api_response = broker.execute_sell(ticker, shares, price)
+                api_response = broker.execute_sell(ticker, shares, price, last_buy.trade_type)
                 if api_response.get("status") == "success":
-                    account.balance += cost
+                    if last_buy.trade_type == "CASH":
+                        account.balance += cost
+                    # TODO: 信用決済時の margin_power / deposit の加減算処理
 
-                    print(f"✅ 【フィードバック】 {shares}株を {price:.2f}円 で売却しました。（売却代金: {cost:,.2f}円）")
+                    print(f"✅ 【フィードバック】 {shares}株を {price:.2f}円 で売却（{last_buy.trade_type}）しました。（売却代金: {cost:,.2f}円）")
 
                     good_pts = ""
                     bad_pts = ""
@@ -156,7 +163,7 @@ def run_trading(ticker: str):
                     print(f"   現在の余力: {account.balance:,.2f}円")
 
                     # トレードとレポートの保存
-                    new_trade = Trade(ticker=ticker, action=action, price=price, shares=shares, pnl=pnl)
+                    new_trade = Trade(ticker=ticker, action=action, trade_type=last_buy.trade_type, price=price, shares=shares, pnl=pnl)
                     session.add(new_trade)
                     session.commit() # commit to get trade ID
 
