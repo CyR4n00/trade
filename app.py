@@ -4,36 +4,53 @@ from models import Session, StrategyParam, Trade, Account, AnalysisReport
 from data import fetch_historical_data
 from strategy import MACrossoverStrategy
 
-st.set_page_config(page_title="Auto Trade Dashboard", layout="wide")
+st.set_page_config(page_title="Auto Trade Dashboard", layout="wide", initial_sidebar_state="expanded")
 
-st.title("自動売買シミュレーション＆トレード ダッシュボード")
+# --- Sidebar (Settings & Mobile Menu) ---
+with st.sidebar:
+    st.title("⚙️ アプリ設定")
+    st.markdown("他のユーザーも利用できるSaaS型AIトレードアプリの設定画面です。")
+
+    st.subheader("🤖 AI連携設定")
+    # Store API key in session state
+    if "gemini_api_key" not in st.session_state:
+        st.session_state["gemini_api_key"] = ""
+
+    api_key_input = st.text_input("Gemini API キー", value=st.session_state["gemini_api_key"], type="password", help="ここにAPIキーを入力すると、次回の高度なAI分析（リサーチ・反省）に利用されます。")
+    if api_key_input != st.session_state["gemini_api_key"]:
+        st.session_state["gemini_api_key"] = api_key_input
+        st.success("APIキーを保存しました！(セッション中のみ有効)")
+
+    st.divider()
+    st.info("💡 スマホでご覧の方は、左上の「>」ボタンからメニューを開閉できます。")
+
+# --- Main App ---
+st.title("📈 自動売買AI ダッシュボード")
 
 session = Session()
 
 # 0. Account Info
-st.header("口座情報 (Account)")
+st.header("💳 口座情報 (Account)")
 account = session.query(Account).first()
 if not account:
     account = Account(balance=1000000.0)
     session.add(account)
     session.commit()
 
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("現在の余力 (Balance)", f"¥{account.balance:,.0f}")
-with col2:
-    with st.expander("余力の設定 / 入金"):
-        new_balance = st.number_input("余力を入力してください (円)", min_value=0, value=int(account.balance), step=10000)
-        if st.button("更新する"):
-            account.balance = new_balance
-            session.commit()
-            st.success(f"余力を {new_balance:,}円 に更新しました！")
-            st.rerun()
+st.metric("現在の現物買付余力 (Balance)", f"¥{account.balance:,.0f}")
+
+with st.expander("余力の設定 / 入金（シミュレーション用）"):
+    new_balance = st.number_input("余力を入力してください (円)", min_value=0, value=int(account.balance), step=10000)
+    if st.button("更新する"):
+        account.balance = new_balance
+        session.commit()
+        st.success(f"余力を {new_balance:,}円 に更新しました！")
+        st.rerun()
 
 st.divider()
 
 # 0.5 Holdings Summary
-st.header("保有株式サマリー (Holdings)")
+st.header("💼 保有株式サマリー (Holdings)")
 
 # Calculate current holdings from trades
 trades = session.query(Trade).order_by(Trade.timestamp.asc()).all()
@@ -104,9 +121,9 @@ st.divider()
 params = session.query(StrategyParam).all()
 
 if not params:
-    st.warning("最適化されたパラメータが見つかりません。先に `python simulation.py` を実行して学習させてください。")
+    st.warning("最適化されたパラメータが見つかりません。リサーチAIと運用AIを実行してください。")
 else:
-    st.subheader("学習済み 最適パラメータ")
+    st.header("📊 AI 学習済み 最適パラメータ")
     param_data = []
     for p in params:
         param_data.append({
@@ -117,14 +134,13 @@ else:
         })
     st.table(pd.DataFrame(param_data))
 
-    # 2. View specific ticker data
-    selected_ticker = st.selectbox("銘柄を選択", [p.ticker for p in params])
+    # 2. View specific ticker data (Mobile friendly layout)
+    st.subheader("チャートと売買シグナルの確認")
+    selected_ticker = st.selectbox("銘柄を選択してください", [p.ticker for p in params])
 
     if selected_ticker:
         # Fetch the selected param
         param = session.query(StrategyParam).filter_by(ticker=selected_ticker).first()
-
-        st.subheader(f"{selected_ticker} の最新チャートと売買シグナル")
 
         # Fetch recent data
         history_days = f"{param.long_window + 30}d"
@@ -142,20 +158,20 @@ else:
             # Display Line Chart
             st.line_chart(chart_data)
 
-            # Show recent signals
-            st.subheader("直近の売買シグナル (直近10日)")
-            recent_signals = df_signals[['Close', 'SMA_short', 'SMA_long', 'Signal', 'Position']].tail(10)
+            with st.expander("直近10日の詳細データとシグナルを見る"):
+                recent_signals = df_signals[['Close', 'SMA_short', 'SMA_long', 'Signal', 'Position']].tail(10)
 
-            def map_action(pos):
-                if pos in [1, 2]: return "BUY"
-                elif pos in [-1, -2]: return "SELL"
-                return "HOLD"
+                def map_action(pos):
+                    if pos in [1, 2]: return "BUY"
+                    elif pos in [-1, -2]: return "SELL"
+                    return "HOLD"
 
-            recent_signals['Action'] = recent_signals['Position'].apply(map_action)
-            st.dataframe(recent_signals)
+                recent_signals['Action'] = recent_signals['Position'].apply(map_action)
+                st.dataframe(recent_signals, use_container_width=True)
 
 # 3. Read Trade History
-st.subheader("実際のトレード履歴 (trading.py 実行結果)")
+st.divider()
+st.header("📝 AI 執行トレード履歴")
 trades = session.query(Trade).order_by(Trade.timestamp.desc()).limit(50).all()
 if not trades:
     st.info("トレード履歴がありません。")
@@ -170,11 +186,12 @@ else:
             "価格": f"¥{t.price:,.2f}",
             "損益 (PnL)": f"¥{t.pnl:,.2f}" if t.pnl is not None else "-"
         })
-    st.dataframe(pd.DataFrame(trade_data))
+    st.dataframe(pd.DataFrame(trade_data), use_container_width=True)
 
 # 4. View AI Analysis Report
 st.divider()
-st.subheader("トレード分析レポート (フィードバック)")
+st.header("🧠 AI トレード分析レポート (自己学習フィードバック)")
+st.markdown("取引執行後に、AIが自身のトレードを振り返って作成したレポートです。")
 reports = session.query(AnalysisReport).order_by(AnalysisReport.timestamp.desc()).limit(10).all()
 
 if not reports:
