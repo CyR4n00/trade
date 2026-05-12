@@ -66,15 +66,21 @@ def run_simulation(ticker: str):
     else:
         print("No profitable parameters found. Will not update database.")
 
+import json
+import os
+
 if __name__ == "__main__":
     init_db()
-    # 日本を代表する優良株ポートフォリオ
-    # 7203: トヨタ自動車 (自動車)
-    # 6758: ソニーグループ (電気機器/エンタメ)
-    # 8306: 三菱UFJフィナンシャル・グループ (銀行)
-    # 8058: 三菱商事 (卸売業/総合商社)
-    # 9433: KDDI (情報・通信業)
-    portfolio = ["7203.T", "6758.T", "8306.T", "8058.T", "9433.T"]
+
+    # リサーチAI (screener.py) が生成したポートフォリオを読み込む
+    portfolio_file = "portfolio.json"
+    if os.path.exists(portfolio_file):
+        with open(portfolio_file, "r") as f:
+            portfolio = json.load(f)
+        print(f"🤖 [運用AI] リサーチAIから {len(portfolio)} 銘柄のリストを受信しました。")
+    else:
+        print("⚠️ portfolio.json が見つかりません。デフォルトのポートフォリオを使用します。")
+        portfolio = ["7203.T", "6758.T", "8306.T", "8058.T", "9433.T"]
 
     print("=== ポートフォリオ一括シミュレーション＆最適化 ===")
     for ticker in portfolio:

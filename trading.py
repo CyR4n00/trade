@@ -177,9 +177,21 @@ def run_trading(ticker: str):
 
     session.close()
 
+import json
+import os
+
 if __name__ == "__main__":
     init_db()
-    portfolio = ["7203.T", "6758.T", "8306.T", "8058.T", "9433.T"]
+
+    # リサーチAI (screener.py) が生成したポートフォリオを読み込む
+    portfolio_file = "portfolio.json"
+    if os.path.exists(portfolio_file):
+        with open(portfolio_file, "r") as f:
+            portfolio = json.load(f)
+        print(f"🤖 [執行AI] リサーチAIから指示された {len(portfolio)} 銘柄の取引予算と執行判定を開始します。")
+    else:
+        print("⚠️ portfolio.json が見つかりません。デフォルトのポートフォリオを使用します。")
+        portfolio = ["7203.T", "6758.T", "8306.T", "8058.T", "9433.T"]
 
     print("=== ポートフォリオ一括トレード判定 ===")
     for ticker in portfolio:
