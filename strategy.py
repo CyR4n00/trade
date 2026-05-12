@@ -1,9 +1,15 @@
 import pandas as pd
 
 class MACrossoverStrategy:
-    def __init__(self, short_window: int = 10, long_window: int = 30):
+    def __init__(self, short_window: int = 10, long_window: int = 30,
+                 min_volume: int = 1000000, price_change_pct: float = 0.01,
+                 take_profit_pct: float = 0.10, stop_loss_pct: float = 0.05):
         self.short_window = short_window
         self.long_window = long_window
+        self.min_volume = min_volume
+        self.price_change_pct = price_change_pct
+        self.take_profit_pct = take_profit_pct
+        self.stop_loss_pct = stop_loss_pct
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -13,6 +19,11 @@ class MACrossoverStrategy:
         0 = Hold
         """
         if len(df) < self.long_window:
+            df = df.copy()
+            df['Signal'] = 0
+            df['Position'] = 0
+            df['SMA_short'] = 0
+            df['SMA_long'] = 0
             return df
 
         df = df.copy()
@@ -26,7 +37,22 @@ class MACrossoverStrategy:
         df.loc[df['SMA_short'] < df['SMA_long'], 'Signal'] = -1
 
         # Calculate daily positions (changes in signal)
-        df['Position'] = df['Signal'].diff()
+        if len(df) > 0:
+            df['Position'] = df['Signal'].diff()
+
+            # Filter 1 & 2: Only apply entry filters to new BUY triggers (Position == 1 or 2)
+            # If the entry conditions are not met, we cancel the BUY trigger by setting Position = 0
+
+            # Volume condition
+            if 'Volume' in df.columns:
+                df.loc[(df['Position'] > 0) & (df['Volume'] < self.min_volume), 'Position'] = 0
+
+            # Price volatility condition
+            df['Daily_Return'] = df['Close'].pct_change().abs()
+            df.loc[(df['Position'] > 0) & (df['Daily_Return'] < self.price_change_pct), 'Position'] = 0
+
+        else:
+            df['Position'] = pd.Series(dtype=float)
 
         return df
 
@@ -41,23 +67,46 @@ class MACrossoverStrategy:
 
         capital = initial_capital
         position = 0 # Number of shares
+        buy_price = 0.0
 
         for index, row in df.iterrows():
+            # 1. Check Stop Loss / Take Profit first if we hold a position
+            if position > 0:
+                current_price = row['Close']
+                profit_ratio = (current_price - buy_price) / buy_price
+
+                # Take Profit
+                if profit_ratio >= self.take_profit_pct:
+                    capital += position * current_price
+                    position = 0
+                    buy_price = 0.0
+                    continue # Skip normal MA signals today
+
+                # Stop Loss
+                if profit_ratio <= -self.stop_loss_pct:
+                    capital += position * current_price
+                    position = 0
+                    buy_price = 0.0
+                    continue # Skip normal MA signals today
+
+            # 2. Check standard signals
             if pd.isna(row['Position']):
                 continue
 
             # Buy signal
-            if row['Position'] == 1 or row['Position'] == 2:
-                if capital > 0:
+            if row['Position'] in [1, 2]:
+                if capital > 0 and position == 0:
                     shares_to_buy = int(capital // row['Close'])
                     if shares_to_buy > 0:
                         position += shares_to_buy
                         capital -= shares_to_buy * row['Close']
+                        buy_price = row['Close']
             # Sell signal
-            elif row['Position'] == -1 or row['Position'] == -2:
+            elif row['Position'] in [-1, -2]:
                 if position > 0:
                     capital += position * row['Close']
                     position = 0
+                    buy_price = 0.0
 
         # Final value
         if position > 0:

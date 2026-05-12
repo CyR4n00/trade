@@ -11,6 +11,10 @@ class StrategyParam(Base):
     ticker = Column(String(20), nullable=False, unique=True)
     short_window = Column(Integer, nullable=False)
     long_window = Column(Integer, nullable=False)
+    min_volume = Column(Integer, nullable=False, default=1000000)
+    price_change_pct = Column(Float, nullable=False, default=0.01)
+    take_profit_pct = Column(Float, nullable=False, default=0.10)
+    stop_loss_pct = Column(Float, nullable=False, default=0.05)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Trade(Base):

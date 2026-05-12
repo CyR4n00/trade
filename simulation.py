@@ -17,11 +17,17 @@ def run_simulation(ticker: str):
     short_windows = [5, 10, 15, 20]
     long_windows = [20, 30, 50, 100]
 
+    # Fixed parameters for strict rules
+    min_volume = 1000000
+    price_change_pct = 0.01
+    take_profit_pct = 0.10
+    stop_loss_pct = 0.05
+
     for short, long in itertools.product(short_windows, long_windows):
         if short >= long:
             continue
 
-        strategy = MACrossoverStrategy(short, long)
+        strategy = MACrossoverStrategy(short, long, min_volume, price_change_pct, take_profit_pct, stop_loss_pct)
         final_capital = strategy.backtest(df, initial_capital)
 
         profit = final_capital - initial_capital
@@ -50,6 +56,10 @@ def run_simulation(ticker: str):
 
         param.short_window = best_params[0]
         param.long_window = best_params[1]
+        param.min_volume = min_volume
+        param.price_change_pct = price_change_pct
+        param.take_profit_pct = take_profit_pct
+        param.stop_loss_pct = stop_loss_pct
         session.commit()
         session.close()
         print("Saved best parameters to database.")
