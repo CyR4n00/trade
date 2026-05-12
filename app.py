@@ -31,10 +31,15 @@ with st.sidebar:
 
     import subprocess
     import sys
+    import os
+
+    # Windows環境の文字化け対策: 子プロセスにUTF-8を強制する
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
 
     if st.button("① リサーチAIを実行 (銘柄選定)", use_container_width=True):
         with st.spinner("市場をスクリーニング中..."):
-            result = subprocess.run([sys.executable, "screener.py"], capture_output=True, text=True)
+            result = subprocess.run([sys.executable, "screener.py"], capture_output=True, text=True, encoding="utf-8", env=env)
             if result.returncode == 0:
                 st.success("リサーチ完了！")
                 st.code(result.stdout)
@@ -44,7 +49,7 @@ with st.sidebar:
 
     if st.button("② 運用AIを実行 (最適化)", use_container_width=True):
         with st.spinner("シミュレーション＆パラメータ最適化中... (数分かかります)"):
-            result = subprocess.run([sys.executable, "simulation.py"], capture_output=True, text=True)
+            result = subprocess.run([sys.executable, "simulation.py"], capture_output=True, text=True, encoding="utf-8", env=env)
             if result.returncode == 0:
                 st.success("最適化完了！")
                 st.code(result.stdout[-500:]) # Show last part to save space
@@ -54,7 +59,7 @@ with st.sidebar:
 
     if st.button("③ 執行AIを実行 (トレード判定)", type="primary", use_container_width=True):
         with st.spinner("取引判定＆実行中..."):
-            result = subprocess.run([sys.executable, "trading.py"], capture_output=True, text=True)
+            result = subprocess.run([sys.executable, "trading.py"], capture_output=True, text=True, encoding="utf-8", env=env)
             if result.returncode == 0:
                 st.success("本日の取引執行が完了しました！")
                 st.code(result.stdout)
