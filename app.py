@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
-from models import Session, StrategyParam, Trade, Account, AnalysisReport
+from models import Session, StrategyParam, Trade, Account, AnalysisReport, init_db
 from data import fetch_historical_data
 from strategy import MACrossoverStrategy
+
+# Initialize DB to prevent crashes if it was manually deleted
+init_db()
 
 st.set_page_config(page_title="Auto Trade Dashboard", layout="wide", initial_sidebar_state="expanded")
 
@@ -22,7 +25,45 @@ with st.sidebar:
         st.success("APIキーを保存しました！(セッション中のみ有効)")
 
     st.divider()
-    st.info("💡 スマホでご覧の方は、左上の「>」ボタンからメニューを開閉できます。")
+
+    st.subheader("🚀 システム実行 (手動コントローラー)")
+    st.markdown("ボタンを押すことで、各AIエージェントを直接起動します。")
+
+    import subprocess
+    import sys
+
+    if st.button("① リサーチAIを実行 (銘柄選定)", use_container_width=True):
+        with st.spinner("市場をスクリーニング中..."):
+            result = subprocess.run([sys.executable, "screener.py"], capture_output=True, text=True)
+            if result.returncode == 0:
+                st.success("リサーチ完了！")
+                st.code(result.stdout)
+            else:
+                st.error("エラーが発生しました。")
+                st.code(result.stderr)
+
+    if st.button("② 運用AIを実行 (最適化)", use_container_width=True):
+        with st.spinner("シミュレーション＆パラメータ最適化中... (数分かかります)"):
+            result = subprocess.run([sys.executable, "simulation.py"], capture_output=True, text=True)
+            if result.returncode == 0:
+                st.success("最適化完了！")
+                st.code(result.stdout[-500:]) # Show last part to save space
+            else:
+                st.error("エラーが発生しました。")
+                st.code(result.stderr)
+
+    if st.button("③ 執行AIを実行 (トレード判定)", type="primary", use_container_width=True):
+        with st.spinner("取引判定＆実行中..."):
+            result = subprocess.run([sys.executable, "trading.py"], capture_output=True, text=True)
+            if result.returncode == 0:
+                st.success("本日の取引執行が完了しました！")
+                st.code(result.stdout)
+                # Force reload to show new trades and balances
+            else:
+                st.error("エラーが発生しました。")
+                st.code(result.stderr)
+
+    st.info("💡 定期的な自動実行（cron等）も可能ですが、スマホからこのボタンを押すことでも手動でAIを動かせます。")
 
 # --- Main App ---
 st.title("📈 自動売買AI ダッシュボード")
