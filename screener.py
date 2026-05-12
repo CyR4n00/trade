@@ -1,6 +1,12 @@
 import yfinance as yf
 import pandas as pd
 import json
+import os
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 # 日本の主要企業群（TOPIX Core30などから抜粋した監視対象ユニバース）
 # 今後、外部API等から動的に取得することも可能
@@ -74,7 +80,26 @@ def analyze_and_screen(tickers: list, top_n: int = 5) -> list:
     # 上位N銘柄を選出
     top_picks = df.head(top_n)['ticker'].tolist()
 
-    print(f"✅ [リサーチAI] スクリーニング完了。以下の {len(top_picks)} 銘柄を本日の運用ポートフォリオに選定しました。")
+    print(f"✅ [リサーチAI] 一次スクリーニング完了。上位 {len(top_picks)} 銘柄を選定しました。")
+
+    # Gemini API連携によるセンチメント分析 (LLM連携)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key and genai:
+        print("🤖 [リサーチAI] Gemini APIを使用して、選定された銘柄の最新の市場センチメントを分析します...")
+        try:
+            client = genai.Client(api_key=api_key)
+            prompt = f"以下の日本株のティッカーシンボルについて、今日の投資家センチメントや関連する最新のポジティブ・ネガティブな要因をそれぞれ1行で簡潔に分析してください。\n対象銘柄: {', '.join(top_picks)}"
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
+            print("📝 【Gemini 市場分析レポート】")
+            print(response.text)
+        except Exception as e:
+            print(f"⚠️ Gemini APIの呼び出しに失敗しました: {e}")
+    else:
+        print("💡 Gemini APIキーが設定されていないため、LLMによる定性的なセンチメント分析はスキップされました。")
+
     for pick in top_picks:
         row = df[df['ticker'] == pick].iloc[0]
         print(f"   - {pick} (1ヶ月モメンタム: {row['momentum']*100:.2f}%, 平均出来高: {row['avg_volume']:,.0f}株)")

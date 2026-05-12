@@ -37,6 +37,10 @@ with st.sidebar:
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
 
+    # Gemini APIキーをバックエンドのスクリプトに渡す
+    if st.session_state.get("gemini_api_key"):
+        env["GEMINI_API_KEY"] = st.session_state["gemini_api_key"]
+
     if st.button("① リサーチAIを実行 (銘柄選定)", use_container_width=True):
         with st.spinner("市場をスクリーニング中..."):
             result = subprocess.run([sys.executable, "screener.py"], capture_output=True, text=True, encoding="utf-8", env=env)

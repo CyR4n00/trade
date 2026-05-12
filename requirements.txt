@@ -3,3 +3,4 @@ sqlalchemy
 pandas
 streamlit
 matplotlib
+google-genai
