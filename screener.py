@@ -74,35 +74,86 @@ def analyze_and_screen(tickers: list, top_n: int = 5) -> list:
     # フィルタリング: 流動性が確保されている（平均出来高 100万株以上）
     df = df[df['avg_volume'] >= 1000000]
 
-    # スコアリング: モメンタムが高い順にソート
-    df = df.sort_values(by="momentum", ascending=False)
+    print(f"✅ [リサーチAI] 基礎データ（モメンタム・出来高）の取得が完了しました。全 {len(df)} 銘柄。")
+
+    # AI感情スコアの初期化
+    df['ai_sentiment_score'] = 0.0
+
+    # Gemini API連携によるセンチメント分析と期待値スコアリング
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key and genai:
+        print("🤖 [リサーチAI] Gemini APIを使用して、各銘柄のニュース・市況に基づいた「期待値スコア」を算出します...")
+        try:
+            from pydantic import BaseModel
+
+            class SentimentScore(BaseModel):
+                ticker: str
+                score: float # 0.0 to 1.0
+                reason: str
+
+            class SentimentResponse(BaseModel):
+                evaluations: list[SentimentScore]
+
+            client = genai.Client(api_key=api_key)
+
+            # APIのトークン制限などを考慮し、上位15銘柄程度に絞って分析
+            candidates = df.sort_values(by="momentum", ascending=False).head(15)['ticker'].tolist()
+
+            prompt = f"""
+            以下の日本株のティッカーシンボルについて、現在の市場環境、直近のニュース、ファンダメンタルズの動向を総合的に評価し、
+            今後の価格上昇の期待値を 0.0 〜 1.0 のスコア（1.0が最も期待できる）で採点してください。
+            対象銘柄: {', '.join(candidates)}
+            """
+
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=SentimentResponse,
+                    temperature=0.2
+                )
+            )
+
+            # Parse JSON
+            result_json = json.loads(response.text)
+
+            print("📝 【Gemini 期待値スコアリング結果】")
+            for eval_data in result_json.get("evaluations", []):
+                t = eval_data.get("ticker")
+                score = eval_data.get("score", 0.0)
+                reason = eval_data.get("reason", "")
+                print(f"   - {t}: スコア {score:.2f} ({reason})")
+
+                # Update dataframe
+                df.loc[df['ticker'] == t, 'ai_sentiment_score'] = score
+
+        except Exception as e:
+            print(f"⚠️ Gemini APIの呼び出しに失敗しました。テクニカル指標のみで選定を続行します。詳細: {e}")
+    else:
+        print("💡 Gemini APIキーが設定されていないため、LLMによる定性的な期待値スコアリングはスキップされました。")
+
+    # 総合期待値スコアの計算 (モメンタムを正規化してAIスコアとブレンド)
+    # 簡単な例: モメンタムの順位スコア + AI感情スコア
+    df['momentum_rank'] = df['momentum'].rank(pct=True) # 0.0 to 1.0
+
+    if api_key and genai:
+        # LLMが有効な場合：モメンタム40%、AI感情60%のウェイトで総合評価
+        df['total_score'] = (df['momentum_rank'] * 0.4) + (df['ai_sentiment_score'] * 0.6)
+    else:
+        # LLMが無効な場合：モメンタムのみ
+        df['total_score'] = df['momentum_rank']
+
+    # スコアリング: 総合スコアが高い順にソート
+    df = df.sort_values(by="total_score", ascending=False)
 
     # 上位N銘柄を選出
     top_picks = df.head(top_n)['ticker'].tolist()
 
-    print(f"✅ [リサーチAI] 一次スクリーニング完了。上位 {len(top_picks)} 銘柄を選定しました。")
-
-    # Gemini API連携によるセンチメント分析 (LLM連携)
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if api_key and genai:
-        print("🤖 [リサーチAI] Gemini APIを使用して、選定された銘柄の最新の市場センチメントを分析します...")
-        try:
-            client = genai.Client(api_key=api_key)
-            prompt = f"以下の日本株のティッカーシンボルについて、今日の投資家センチメントや関連する最新のポジティブ・ネガティブな要因をそれぞれ1行で簡潔に分析してください。\n対象銘柄: {', '.join(top_picks)}"
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt
-            )
-            print("📝 【Gemini 市場分析レポート】")
-            print(response.text)
-        except Exception as e:
-            print(f"⚠️ Gemini APIの呼び出しに失敗しました: {e}")
-    else:
-        print("💡 Gemini APIキーが設定されていないため、LLMによる定性的なセンチメント分析はスキップされました。")
-
+    print(f"\n🏆 [リサーチAI] 最終選定完了。以下の {len(top_picks)} 銘柄を本日の運用ポートフォリオに決定しました。")
     for pick in top_picks:
         row = df[df['ticker'] == pick].iloc[0]
-        print(f"   - {pick} (1ヶ月モメンタム: {row['momentum']*100:.2f}%, 平均出来高: {row['avg_volume']:,.0f}株)")
+        print(f"   ⭐ {pick} (総合スコア: {row['total_score']:.2f}, AIスコア: {row['ai_sentiment_score']:.2f}, モメンタム: {row['momentum']*100:.2f}%)")
 
     return top_picks
 

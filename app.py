@@ -164,7 +164,18 @@ else:
     with col_b:
         st.metric("評価損益 計", f"¥{total_unrealized_pnl:,.0f}", delta=float(total_unrealized_pnl))
 
-    st.dataframe(pd.DataFrame(summary_data))
+    st.markdown("### 保有銘柄一覧")
+    for data in summary_data:
+        with st.container(border=True):
+            cols = st.columns([2, 1, 1])
+            with cols[0]:
+                st.markdown(f"**{data['銘柄']}**")
+                st.markdown(f"{data['保有株数']:,}株 保有 (平均取得単価: {data['取得単価']})")
+            with cols[1]:
+                st.markdown("現在値")
+                st.markdown(f"**{data['現在値']}**")
+            with cols[2]:
+                st.metric("評価損益", data['評価損益'], delta=float(data['評価損益'].replace('¥', '').replace(',', '')))
 
 st.divider()
 
