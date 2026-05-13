@@ -1,15 +1,14 @@
 @echo off
-chcp 65001 > nul
-echo ====================================================
-echo AI自動売買ダッシュボードを起動しています...
-echo この黒い画面は閉じずにそのままにしておいてください。
-echo アプリを終了するときは、この画面を閉じてください。
-echo ====================================================
 
-:: 現在のディレクトリに移動
 cd /d "%~dp0"
 
-:: 仮想環境(Anacondaなど)が有効化されている前提でstreamlitを実行
+:: Activate Anaconda environment if it exists in the default user directory
+if exist "%USERPROFILE%\anaconda3\Scripts\activate.bat" (
+    call "%USERPROFILE%\anaconda3\Scripts\activate.bat"
+) else if exist "C:\ProgramData\Anaconda3\Scripts\activate.bat" (
+    call "C:\ProgramData\Anaconda3\Scripts\activate.bat"
+)
+
 python -m streamlit run app.py
 
 pause

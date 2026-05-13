@@ -68,6 +68,7 @@ with st.sidebar:
                 st.success("本日の取引執行が完了しました！")
                 st.code(result.stdout)
                 # Force reload to show new trades and balances
+                st.rerun()
             else:
                 st.error("エラーが発生しました。")
                 st.code(result.stderr)
